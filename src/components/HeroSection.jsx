@@ -30,7 +30,7 @@ const HeroSection = ({ blog }) => {
                     <div className="flex items-center gap-4">
                         <div className="w-10 h-10 rounded-full border-2 border-white/20 overflow-hidden">
                             {blog.author.profile?.avatar ? (
-                                <img className="w-full h-full object-cover" src={blog.author.profile.avatar} alt={blog.author.username} />
+                                <img className="w-full h-full object-cover" src={getImageUrl(blog.author.profile.avatar)} alt={blog.author.username} />
                             ) : (
                                 <div className="w-full h-full flex items-center justify-center text-sm font-bold text-white bg-primary">
                                     {blog.author.username[0].toUpperCase()}
