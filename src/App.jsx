@@ -28,6 +28,14 @@ function App() {
             } 
           />
           <Route 
+            path="/edit/:id" 
+            element={
+              <ProtectedRoute>
+                <WriteBlogPage />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
             path="/profile" 
             element={
               <ProtectedRoute>

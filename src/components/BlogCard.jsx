@@ -1,17 +1,67 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { getImageUrl } from '../utils/helpers';
+import { useAuth } from '../context/AuthContext';
+import { deleteBlog } from '../services/blog';
+import ConfirmModal from './ConfirmModal';
 
-const BlogCard = ({ blog }) => {
+const BlogCard = ({ blog, onDeleteSuccess }) => {
+    const { user } = useAuth();
+    const navigate = useNavigate();
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+    
+    const handleDeleteClick = (e) => {
+        e.preventDefault(); // prevent triggering the card Link
+        setIsDeleteModalOpen(true);
+    };
+
+    const handleConfirmDelete = async () => {
+        setIsDeleting(true);
+        try {
+            await deleteBlog(blog.id);
+            if (onDeleteSuccess) {
+                onDeleteSuccess(blog.id);
+            } else {
+                window.location.reload();
+            }
+        } catch (err) {
+            console.error('Failed to delete blog', err);
+            alert('Failed to delete story');
+            setIsDeleting(false);
+            setIsDeleteModalOpen(false);
+        }
+    };
     return (
+        <>
         <article className="group cursor-pointer flex flex-col gap-4 bg-white p-4 rounded-xl border border-transparent hover:border-slate-100 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
-            <Link to={`/blog/${blog.id}`} className="aspect-[16/10] overflow-hidden rounded-lg bg-slate-50">
-                <img 
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
-                    src={getImageUrl(blog.hero_banner)} 
-                    alt={blog.title} 
-                />
-            </Link>
+            <div className="relative aspect-[16/10] overflow-hidden rounded-lg bg-slate-50">
+                <Link to={`/blog/${blog.id}`} className="w-full h-full block">
+                    <img 
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
+                        src={getImageUrl(blog.hero_banner)} 
+                        alt={blog.title} 
+                    />
+                </Link>
+                {user && user?.id == blog?.author?.id && (
+                    <div className="absolute top-2 right-2 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                            onClick={(e) => { e.preventDefault(); navigate(`/edit/${blog.id}`); }}
+                            className="size-8 rounded-full bg-white/90 backdrop-blur text-slate-700 hover:text-primary hover:bg-white shadow-sm flex items-center justify-center transition-all disabled:opacity-50"
+                            title="Edit Story"
+                        >
+                            <span className="material-symbols-outlined text-sm">edit</span>
+                        </button>
+                        <button 
+                            onClick={handleDeleteClick}
+                            className="size-8 rounded-full bg-white/90 backdrop-blur text-red-500 hover:text-white hover:bg-red-500 shadow-sm flex items-center justify-center transition-all disabled:opacity-50"
+                            title="Delete Story"
+                        >
+                            <span className="material-symbols-outlined text-sm">delete</span>
+                        </button>
+                    </div>
+                )}
+            </div>
             <div className="flex flex-col flex-1">
                 <div className="flex items-center gap-2 mb-2">
                     <span className="text-[11px] font-bold text-primary bg-primary/5 px-2 py-0.5 rounded-full uppercase">
@@ -47,6 +97,15 @@ const BlogCard = ({ blog }) => {
                 </div>
             </div>
         </article>
+        <ConfirmModal 
+            isOpen={isDeleteModalOpen}
+            onClose={() => setIsDeleteModalOpen(false)}
+            onConfirm={handleConfirmDelete}
+            title="Delete Story"
+            message="Are you sure you want to delete this story? This action cannot be undone."
+            processing={isDeleting}
+        />
+        </>
     );
 };
 

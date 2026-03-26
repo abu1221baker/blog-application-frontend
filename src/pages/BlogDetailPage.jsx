@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import BlogContent from '../components/BlogContent';
-import { getBlogDetail, toggleLike } from '../services/blog';
+import { getBlogDetail, toggleLike, deleteBlog } from '../services/blog';
 import { getImageUrl, formatDate } from '../utils/helpers';
 import { useAuth } from '../context/AuthContext';
 import { motion } from 'framer-motion';
 import CommentSection from '../components/CommentSection';
+import ConfirmModal from '../components/ConfirmModal';
 
 const BlogDetailPage = () => {
     const { id } = useParams();
@@ -16,7 +17,10 @@ const BlogDetailPage = () => {
     const [error, setError] = useState(null);
     const [isLiked, setIsLiked] = useState(false);
     const [likeCount, setLikeCount] = useState(0);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const { user } = useAuth();
+    const navigate = useNavigate();
 
     useEffect(() => {
         const fetchBlog = async () => {
@@ -48,6 +52,23 @@ const BlogDetailPage = () => {
             setLikeCount(data.like_count);
         } catch (err) {
             console.error('Failed to toggle like:', err);
+        }
+    };
+
+    const handleDeleteClick = () => {
+        setIsDeleteModalOpen(true);
+    };
+
+    const handleConfirmDelete = async () => {
+        setIsDeleting(true);
+        try {
+            await deleteBlog(id);
+            navigate(`/profile/${user?.id}`);
+        } catch (err) {
+            console.error(err);
+            alert("Failed to delete blog.");
+            setIsDeleting(false);
+            setIsDeleteModalOpen(false);
         }
     };
 
@@ -137,6 +158,24 @@ const BlogDetailPage = () => {
                                     <p className="text-xs font-medium text-slate-400">Published {formatDate(blog.created_at)}</p>
                                 </div>
                             </div>
+
+                            {user && user?.id == blog?.author?.id && (
+                                <div className="flex flex-col gap-2 pt-4 border-t border-slate-50">
+                                    <Link to={`/edit/${blog.id}`} className="w-full focus:outline-none bg-slate-100 text-slate-600 text-center text-sm font-bold py-2.5 rounded-lg hover:bg-slate-200 transition-all flex items-center justify-center gap-2">
+                                        <span className="material-symbols-outlined text-sm">edit</span>
+                                        Edit Story
+                                    </Link>
+                                    <button 
+                                        onClick={handleDeleteClick}
+                                        disabled={isDeleting}
+                                        className="w-full focus:outline-none bg-red-50 text-red-600 text-center text-sm font-bold py-2.5 rounded-lg hover:bg-red-100 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                                    >
+                                        <span className="material-symbols-outlined text-sm">delete</span>
+                                        {isDeleting ? 'Deleting...' : 'Delete Story'}
+                                    </button>
+                                </div>
+                            )}
+
                             <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-50">
                                 <Link to={`/profile/${blog.author.id}`} className="flex-1 bg-primary text-white text-center text-sm font-bold py-2 rounded-lg hover:shadow-lg hover:shadow-primary/20 transition-all">View Profile</Link>
                             </div>
@@ -182,6 +221,14 @@ const BlogDetailPage = () => {
                 </div>
             </main>
             <Footer />
+            <ConfirmModal 
+                isOpen={isDeleteModalOpen}
+                onClose={() => setIsDeleteModalOpen(false)}
+                onConfirm={handleConfirmDelete}
+                title="Delete Story"
+                message="Are you sure you want to delete this story? This action cannot be undone."
+                processing={isDeleting}
+            />
         </div>
     );
 };

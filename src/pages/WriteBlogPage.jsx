@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { createBlog, createBlogContent } from '../services/blog';
+import { useNavigate, useParams } from 'react-router-dom';
+import { createBlog, createBlogContent, getBlogDetail, updateBlog, deleteBlogContent, updateBlogContent } from '../services/blog';
+import { getImageUrl } from '../utils/helpers';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 
@@ -18,6 +19,38 @@ const WriteBlogPage = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const navigate = useNavigate();
+    const { id } = useParams();
+    const isEditing = !!id;
+
+    React.useEffect(() => {
+        if (isEditing) {
+            setLoading(true);
+            getBlogDetail(id).then(data => {
+                setMetadata({
+                    title: data.title || '',
+                    hero_title: data.hero_title || '',
+                    hero_subtitle: data.hero_subtitle || '',
+                    hero_banner: null,
+                    is_published: data.is_published
+                });
+                if (data.contents && data.contents.length > 0) {
+                    setContents(data.contents.map(c => ({
+                        id: c.id,
+                        content_type: c.content_type,
+                        text: c.text || '',
+                        image: null,
+                        existing_image: c.image,
+                        order: c.order
+                    })));
+                }
+            }).catch(err => {
+                setError('Failed to load blog for editing.');
+                console.error(err);
+            }).finally(() => {
+                setLoading(false);
+            });
+        }
+    }, [id, isEditing]);
 
     const handleMetadataChange = (e) => {
         const { name, value, type, checked, files } = e.target;
@@ -64,19 +97,44 @@ const WriteBlogPage = () => {
             }
             blogFormData.append('is_published', metadata.is_published);
 
-            const blog = await createBlog(blogFormData);
+            let blog;
+            if (isEditing) {
+                blog = await updateBlog(id, blogFormData);
+            } else {
+                blog = await createBlog(blogFormData);
+            }
 
-            // 2. Create Content Blocks
-            for (const block of contents) {
+            // 2. Manage Content Blocks
+            const currentBlogId = isEditing ? id : blog.id;
+            
+            if (isEditing) {
+                const oldBlog = await getBlogDetail(currentBlogId);
+                const oldBlockIds = oldBlog.contents.map(c => c.id);
+                const newBlockIds = contents.map(c => c.id).filter(Boolean);
+                const deletedBlockIds = oldBlockIds.filter(oldId => !newBlockIds.includes(oldId));
+                
+                for (const delId of deletedBlockIds) {
+                    await deleteBlogContent(currentBlogId, delId);
+                }
+            }
+
+            for (let i = 0; i < contents.length; i++) {
+                const block = contents[i];
                 const contentFormData = new FormData();
                 contentFormData.append('content_type', block.content_type);
-                contentFormData.append('order', block.order);
+                contentFormData.append('order', i);
+                
                 if (block.content_type === 'text') {
                     contentFormData.append('text', block.text);
                 } else if (block.content_type === 'image' && block.image) {
                     contentFormData.append('image', block.image);
                 }
-                await createBlogContent(blog.id, contentFormData);
+                
+                if (isEditing && block.id) {
+                    await updateBlogContent(currentBlogId, block.id, contentFormData);
+                } else {
+                    await createBlogContent(currentBlogId, contentFormData);
+                }
             }
 
             navigate(`/blog/${blog.id}`);
@@ -95,8 +153,8 @@ const WriteBlogPage = () => {
             <main className="flex-grow py-12 px-6">
                 <div className="max-w-4xl mx-auto">
                     <header className="mb-12">
-                        <h1 className="text-4xl font-black text-primary mb-4">Write your story</h1>
-                        <p className="text-slate-500">Compose a masterpiece that will inspire the world.</p>
+                        <h1 className="text-4xl font-black text-primary mb-4">{isEditing ? 'Edit your story' : 'Write your story'}</h1>
+                        <p className="text-slate-500">{isEditing ? 'Make your masterpiece even better.' : 'Compose a masterpiece that will inspire the world.'}</p>
                     </header>
 
                     {error && (
@@ -205,7 +263,14 @@ const WriteBlogPage = () => {
                                                     htmlFor={`image_input_${index}`}
                                                     className="flex flex-col items-center justify-center aspect-video border-2 border-dashed border-slate-100 rounded-xl cursor-pointer hover:bg-slate-50/50 transition-all font-bold"
                                                 >
-                                                    {block.image ? (
+                                                    {block.existing_image && !block.image ? (
+                                                        <div className="text-center w-full h-full relative group/img">
+                                                            <img src={getImageUrl(block.existing_image)} alt="block" className="w-full h-full object-cover rounded-xl" />
+                                                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/img:opacity-100 flex items-center justify-center transition-all">
+                                                                <span className="text-white text-sm font-bold">Change Image</span>
+                                                            </div>
+                                                        </div>
+                                                    ) : block.image ? (
                                                         <div className="text-center">
                                                             <span className="material-symbols-outlined text-green-500 mb-2">check_circle</span>
                                                             <p className="text-sm">{block.image.name}</p>
@@ -244,12 +309,22 @@ const WriteBlogPage = () => {
                             </div>
                         </section>
 
-                        <div className="pt-12 border-t border-slate-100 flex justify-end">
+                        <div className="pt-12 border-t border-slate-100 flex justify-end gap-4">
+                            {isEditing && (
+                                <button 
+                                    type="button" 
+                                    onClick={() => navigate(`/blog/${id}`)}
+                                    disabled={loading}
+                                    className="bg-white hover:bg-slate-50 text-slate-700 font-bold py-4 px-12 rounded-full transition-all border border-slate-200 focus:outline-none"
+                                >
+                                    Cancel
+                                </button>
+                            )}
                             <button 
                                 type="submit" disabled={loading}
                                 className={`bg-primary hover:bg-slate-800 text-white font-bold py-4 px-12 rounded-full transition-all shadow-xl shadow-primary/20 ${loading ? 'opacity-50' : ''}`}
                             >
-                                {loading ? 'Publishing...' : 'Publish Story'}
+                                {loading ? (isEditing ? 'Saving...' : 'Publishing...') : (isEditing ? 'Save Changes' : 'Publish Story')}
                             </button>
                         </div>
                     </form>
